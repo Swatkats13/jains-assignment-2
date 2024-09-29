@@ -1,3 +1,5 @@
+
+
 import numpy as np
 
 class KMeans:
@@ -7,15 +9,18 @@ class KMeans:
         self.max_iters = max_iters
         self.tol = tol
         self.centroids = None
-        self.assignment = None
-    
-    def initialize_centroids(self, X):
+        self.assignment = None  # Tracks cluster assignment of points
+
+    def initialize_centroids(self, X, manual_centroids=None):
         if self.init_method == 'random':
             return X[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
         elif self.init_method == 'farthest_first':
             return self.farthest_first_initialization(X)
         elif self.init_method == 'kmeans++':
             return self.kmeans_plus_plus_initialization(X)
+        elif self.init_method == 'manual':
+            # Use the manually provided centroids from user clicks
+            return np.array(manual_centroids)
 
     def farthest_first_initialization(self, X):
         centroids = [X[np.random.choice(len(X))]]  # Start with a random point
@@ -37,46 +42,24 @@ class KMeans:
         return np.array(centroids)
 
     def fit(self, X, manual_centroids=None):
-        if manual_centroids is not None:
-            self.centroids = np.array(manual_centroids)
-        else:
-            self.centroids = self.initialize_centroids(X)
-        
-        for _ in range(self.max_iters):
+        self.centroids = self.initialize_centroids(X, manual_centroids=manual_centroids)
+        for _ in range(self.max_iters):  # Max 100 iterations to ensure convergence
             clusters = self.assign_clusters(X)
-            new_centroids = []
-            for i in range(self.n_clusters):
-                cluster_points = X[clusters == i]
-                if len(cluster_points) == 0:
-                    new_centroids.append(self.centroids[i])  # Handle empty cluster
-                else:
-                    new_centroids.append(cluster_points.mean(axis=0))
-
-            new_centroids = np.array(new_centroids)
-
-            if np.all(np.linalg.norm(new_centroids - self.centroids, axis=1) < self.tol):
-                break  # Converged
+            new_centroids = np.array([X[clusters == i].mean(axis=0) for i in range(self.n_clusters)])
+            if np.allclose(new_centroids, self.centroids, rtol=self.tol):
+                break
             self.centroids = new_centroids
 
-        self.assignment = clusters
-
     def step(self, X):
-        # Perform one iteration of KMeans (stepping through the algorithm)
         clusters = self.assign_clusters(X)
-        new_centroids = []
-        for i in range(self.n_clusters):
-            cluster_points = X[clusters == i]
-            if len(cluster_points) == 0:
-                new_centroids.append(self.centroids[i])  # Handle empty cluster
-            else:
-                new_centroids.append(cluster_points.mean(axis=0))
-
-        self.centroids = np.array(new_centroids)
-        self.assignment = clusters
+        new_centroids = np.array([X[clusters == i].mean(axis=0) for i in range(self.n_clusters)])
+        self.centroids = new_centroids
 
     def assign_clusters(self, X):
         distances = np.array([[np.linalg.norm(x - c) for c in self.centroids] for x in X])
-        return np.argmin(distances, axis=1)
+        self.assignment = np.argmin(distances, axis=1)
+        return self.assignment
 
     def predict(self, X):
         return self.assign_clusters(X)
+

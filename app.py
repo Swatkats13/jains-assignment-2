@@ -1,3 +1,8 @@
+
+
+
+
+
 import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output, State
@@ -41,10 +46,13 @@ app.layout = html.Div([
         )
     ], style={'textAlign': 'center', 'marginBottom': '20px'}),
     
+    # Instructions for manual initialization
+    html.Div(id='manual-instructions', style={'textAlign': 'center', 'color': 'red', 'marginBottom': '20px'}),
+
     # Buttons for control
     html.Div([
-        html.Button('Run to Convergence', id='step-button', n_clicks=0, style={'marginRight': '10px'}),
-        html.Button('Step Through KMeans', id='run-button', n_clicks=0, style={'marginRight': '10px'}),
+        html.Button('Run To Convergence', id='step-button', n_clicks=0, style={'marginRight': '10px'}),
+        html.Button('Steps Through KMeans', id='run-button', n_clicks=0, style={'marginRight': '10px'}),
         html.Button('Generate New Dataset', id='generate-button', n_clicks=0, style={'marginRight': '10px'}),
         html.Button('Reset Algorithm', id='reset-button', n_clicks=0),
     ], style={'textAlign': 'center', 'marginBottom': '20px'}),
@@ -54,6 +62,17 @@ app.layout = html.Div([
     
 ], style={'fontFamily': 'Arial', 'backgroundColor': '#F0F8FF', 'padding': '20px'})
 
+# Callback to show instructions if Manual Initialization is selected
+@app.callback(
+    Output('manual-instructions', 'children'),
+    Input('init-method', 'value')
+)
+def display_manual_instructions(init_method):
+    if init_method == 'manual':
+        return 'Click on the graph to select centroids. You can select up to the specified number of clusters.'
+    return ''
+
+# Combined Callback to Generate Dataset, Run KMeans, and Reset Graph
 @app.callback(
     Output('kmeans-graph', 'figure'),
     [Input('generate-button', 'n_clicks'),
@@ -73,49 +92,62 @@ def update_graph(gen_clicks, step_clicks, run_clicks, reset_clicks, click_data, 
     else:
         button_id = ctx.triggered[0]['prop_id'].split('.')[0]
 
-    # Generate dataset
     if button_id == 'generate-button':
+        # Generate a dataset of 300 random points
         centers = [[0, 0], [2, 2], [-3, 2], [2, -4]]
         X, _ = datasets.make_blobs(n_samples=300, centers=centers, cluster_std=1, random_state=0)
+        manual_centroids = []  # Reset manual centroids
         return go.Figure(data=[go.Scatter(x=X[:, 0], y=X[:, 1], mode='markers')])
 
-    # Step through KMeans
+    elif button_id == 'kmeans-graph' and init_method == 'manual' and click_data:
+        # Add centroids based on user's click, up to n_clusters
+        if len(manual_centroids) < n_clusters:
+            x = click_data['points'][0]['x']
+            y = click_data['points'][0]['y']
+            manual_centroids.append([x, y])
+        
+        # Plot the centroids
+        fig = go.Figure(data=[go.Scatter(x=X[:, 0], y=X[:, 1], mode='markers')])
+        if manual_centroids:
+            centroids_np = np.array(manual_centroids)
+            fig.add_trace(go.Scatter(x=centroids_np[:, 0], y=centroids_np[:, 1], mode='markers',
+                                     marker=dict(symbol='x', size=12, color='red'),
+                                     name='Centroids'))
+        return fig
+
     elif button_id == 'step-button':
+        # Step through KMeans
         if kmeans is None:
             kmeans = KMeans(n_clusters=n_clusters, init_method=init_method)
             if init_method == 'manual' and manual_centroids:
-                kmeans.fit(X, manual_centroids=manual_centroids)  # Use manual centroids if provided
+                kmeans.fit(X, manual_centroids=manual_centroids)
             else:
                 kmeans.fit(X)
 
-        kmeans.step(X)  # Perform one step through KMeans
+        kmeans.step(X)  # Perform one step
         centroids = kmeans.centroids
         fig = plot_clusters_with_centroids(X, kmeans.assignment, centroids)
         return fig
 
-    # Run to convergence
     elif button_id == 'run-button':
+        # Run to Convergence
         if kmeans is None:
             kmeans = KMeans(n_clusters=n_clusters, init_method=init_method)
             if init_method == 'manual' and manual_centroids:
-                kmeans.fit(X, manual_centroids=manual_centroids)  # Use manual centroids if provided
+                kmeans.fit(X, manual_centroids=manual_centroids)
             else:
                 kmeans.fit(X)
 
-        kmeans.fit(X)  # Run KMeans to convergence
+        kmeans.fit(X)
         centroids = kmeans.centroids
         fig = plot_clusters_with_centroids(X, kmeans.assignment, centroids)
         return fig
 
-    # Reset
     elif button_id == 'reset-button':
+        # Reset the graph and algorithm
         kmeans = None
+        manual_centroids = []
         return go.Figure(data=[go.Scatter(x=X[:, 0], y=X[:, 1], mode='markers')])
-
-    # Handle manual centroid selection
-    if click_data and init_method == 'manual':
-        point = click_data['points'][0]['x'], click_data['points'][0]['y']
-        manual_centroids.append(point)
 
     return go.Figure()
 
@@ -138,3 +170,5 @@ def plot_clusters_with_centroids(X, assignment, centroids):
 # Run the Dash app
 if __name__ == "__main__":
     app.run_server(debug=True, port=3000)
+
+
