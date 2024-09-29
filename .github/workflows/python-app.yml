@@ -1,0 +1,37 @@
+name: Python application workflow
+
+# Trigger the workflow on push or pull requests to the main branch
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    # Step 1: Check out the code
+    - name: Checkout the code
+      uses: actions/checkout@v2
+
+    # Step 2: Set up Python environment
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.10.14'  # Adjust this based on your project's Python version
+
+    # Step 3: Install dependencies using the Makefile
+    - name: Install dependencies
+      run: make install
+
+    # Step 4: Run the application with make run
+    - name: Run the application
+      run: |
+        make run &  # Run the server in the background
+        sleep 10  # Wait for the server to start
+        curl http://localhost:3000  # Test if the server is accessible
